@@ -1,15 +1,13 @@
 package server;
 
-import server.commandHandler.utility.CommandHandler;
-import server.commandHandler.utility.CommandManager;
-import server.commandHandler.utility.DataBaseManager;
-import server.commandHandler.utility.ServerOutput;
+import server.commandHandler.commands.*;
+import server.commandHandler.utility.*;
 import server.queryReader.QueryReader;
-import server.responseSender.ResponseSender;
 import common.*;
+import server.responseSender.SendingResponseTask;
 import server.utility.Encryptor;
 import server.utility.UserRegistrant;
-import server.utility.UserValidator;
+import server.utility.UserAuthorizer;
 import server.utility.ValidateUserTask;
 
 import java.io.IOException;
@@ -23,23 +21,25 @@ public class QueryHandler implements Runnable{
     private ForkJoinPool forkJoinPool;
     private SocketChannel socketChannel;
     private ExecutorService fixedThreadPool;
-    private CommandManager commandManager;
+    private CollectionManager collectionManager;
     private Connection dataBaseConnection;
     private DataBaseManager dataBaseManager;
     private InputStream in;
     private QueryReader queryReader;
-    private UserValidator userValidator;
-    public QueryHandler(CommandManager commandManager,
+    private UserAuthorizer userAuthorizer;
+    private CommandManager commandManager;
+    public QueryHandler(CollectionManager collectionManager,
                         ExecutorService fixedThreadPool,
                         ForkJoinPool forkJoinPool,
                         SocketChannel socketChannel,
                         Connection connection,
                         DataBaseManager dataBaseManager
-    ){
+    )
+    {
         this.forkJoinPool = forkJoinPool;
         this.socketChannel = socketChannel;
         this.fixedThreadPool = fixedThreadPool;
-        this.commandManager = commandManager;
+        this.collectionManager = collectionManager;
         this.dataBaseConnection = connection;
         this.dataBaseManager = dataBaseManager;
 
@@ -51,32 +51,62 @@ public class QueryHandler implements Runnable{
         }
         queryReader = QueryReader.getInstance();
         try {
-            userValidator = new UserValidator(dataBaseConnection,dataBaseManager);
+            userAuthorizer = new UserAuthorizer(dataBaseConnection,dataBaseManager,fixedThreadPool,socketChannel);
         } catch (NoSuchAlgorithmException e) {
             ServerOutput.warning("Setting user validator error");
             return;
         }
+        commandManager = new CommandManager(
+                new ShowCommand(collectionManager),
+                new ReplaceIfLowerCommand(collectionManager),
+                new ClearCommand(collectionManager),
+                new ExecuteScriptCommand(),
+                new ExitCommand(),
+                new FilterByTransportCommand(collectionManager),
+                new InfoCommand(collectionManager),
+                new InsertCommand(collectionManager),
+                new MinByAreaCommand(collectionManager),
+                new RemoveAllByHouseCommand(collectionManager),
+                new RemoveGreaterCommand(collectionManager),
+                new RemoveKeyCommand(collectionManager),
+                new UpdateCommand(collectionManager)
+        );
+        commandManager.addCommand(new HelpCommand(commandManager));
+        commandManager.addCommand(new HistoryCommand(commandManager));
     }
     public void run(){
-        boolean loggedIn = logIn(userValidator,queryReader,in);
+        boolean loggedIn;
+        try{
+            loggedIn = userAuthorizer.logIn(userAuthorizer,queryReader,in);
+        } catch (NullPointerException e){
+            return;
+        }
         boolean isRunning = true;
         while(isRunning && loggedIn){
-
             Query query = queryReader.getQuery(in);
             if (query==null){
                 break;
             }
-            FutureTask<Boolean> futureLoggedIn = new FutureTask<>(new ValidateUserTask(query.getLogin(),query.getPassword(),userValidator));
+            FutureTask<Boolean> futureLoggedIn = new FutureTask<>(new ValidateUserTask(query.getLogin(),query.getPassword(), userAuthorizer));
             new Thread(futureLoggedIn).start();
             Future<Response> response = forkJoinPool.submit(new CommandHandler(query, commandManager));
             try {
                 if(!futureLoggedIn.get()){
-                    fixedThreadPool.execute(new ResponseSender(new Response("You are not logged in",true,Instruction.SIGN_IN), socketChannel));
+                    fixedThreadPool.execute(new SendingResponseTask(new Response("You are not logged in",true,Instruction.SIGN_IN), socketChannel));
+
                     loggedIn = futureLoggedIn.get();
                 } else {
 
-                    fixedThreadPool.execute(new ResponseSender(response.get(), socketChannel));
-                    if (response.get().getInstruction().equals(Instruction.EXIT)) isRunning = false;
+                    fixedThreadPool.execute(new SendingResponseTask(response.get(), socketChannel));
+                    if (response.get().getInstruction().equals(Instruction.EXIT)){
+                        isRunning = false;
+                        try {
+                            Thread.sleep(1000);
+                            socketChannel.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -87,39 +117,5 @@ public class QueryHandler implements Runnable{
             }
     }
 
-    private boolean logIn(UserValidator userValidator, QueryReader queryReader, InputStream in){
-        boolean loggedIn = false;
-        while(!loggedIn){
-            System.out.println(1);
-            Query auth = queryReader.getQuery(in);
-            if (auth.isSignUp()){
-                Response authResponse;
-                if(userValidator.validate(auth.getLogin(),auth.getPassword())) {
-                    authResponse = new Response("This login already exists",true,Instruction.SIGN_UP);
-                } else {
-                    try {
-                        UserRegistrant userRegistrant = new UserRegistrant(dataBaseConnection,dataBaseManager,new Encryptor());
-                        if (!userRegistrant.register(auth.getLogin(),auth.getPassword()))System.out.println("Failed to register");
-                        authResponse = new Response("Successfully signed up",false,Instruction.SIGN_IN);
-                    } catch (NoSuchAlgorithmException e) {
-                        ServerOutput.warning("Encryptor debil");
-                        return false;
-                    }
-                }
-                fixedThreadPool.execute(new ResponseSender(authResponse,socketChannel));
-            } else {
-                loggedIn = userValidator.validate(auth.getLogin(), auth.getPassword());
-                Response authResponse = new Response(
-                        loggedIn ?
-                                "You are logged in" :
-                                "Incorrect login or password",
-                        !loggedIn,
-                        loggedIn? Instruction.ASK_COMMAND :
-                                Instruction.SIGN_IN
-                );
-                fixedThreadPool.execute(new ResponseSender(authResponse,socketChannel));
-            }
-        }
-        return true;
-    }
+
 }

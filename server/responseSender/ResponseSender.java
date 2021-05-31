@@ -3,26 +3,27 @@ package server.responseSender;
 import server.commandHandler.utility.ServerOutput;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import common.*;
-public class ResponseSender implements Runnable{
+public class ResponseSender{
+    private static ResponseSender INSTANCE;
 
-    private SocketChannel socketChannel;
-    private Response response;
-
-    public ResponseSender(Response response, SocketChannel socketChannel){
-        this.response = response;
-        this.socketChannel = socketChannel;
+    public static ResponseSender getInstance(){
+        if (INSTANCE==null) {
+            INSTANCE = new ResponseSender();
+        }
+        return INSTANCE;
     }
 
-    public void run(){
+    public synchronized void sendResponse(Response response, SocketChannel socketChannel){
         try{
             byte[] bytes = Serializer.serialize(response);
-            socketChannel.socket().getOutputStream().write(bytes);
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            socketChannel.write(byteBuffer);
             ServerOutput.info("Sent new response");
-            if(response.getInstruction() == Instruction.EXIT){
-                socketChannel.close();
-            }
         }catch(IOException e){
             ServerOutput.warning("Failed to send response");
         }

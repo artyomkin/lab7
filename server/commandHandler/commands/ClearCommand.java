@@ -3,6 +3,11 @@ import common.Instruction;
 import common.Query;
 import common.Response;
 import server.commandHandler.utility.CollectionManager;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * Clear whole collection by removing all elements
  * **/
@@ -18,10 +23,12 @@ public class ClearCommand extends AbstractCommand{
      * **/
     @Override
     public Response execute(Query query) {
+        int executed =
         collectionManager.getStream()
                 .filter(flat->flat.getCreator().equals(query.getLogin()))
                 .map(flat->flat.getID())
-                .forEach(id->collectionManager.remove(id));
-        return new Response("Collection is cleared",false, Instruction.ASK_COMMAND);
+                .map(id->collectionManager.remove(id))
+                .collect(Collectors.toList()).size();
+        return new Response("Removed " + executed + " elements", false, Instruction.ASK_COMMAND);
     }
 }

@@ -12,15 +12,16 @@ import java.util.Properties;
 
 public class DatabaseConnection {
     private static String DRIVER = "org.postgresql.Driver";
-    private static String URL = "jdbc:postgresql://pg/studs";
-    private static String USER = "s312394";
-    private static String PASSWORD = "izq929";
-
+    private static String URL = "jdbc:postgresql://pg:5432/studs";
+    //private static String URL = "jdbc:postgresql://localhost:5432/postgres";
 
     public static Connection getConnection(){
         try {
+            Properties properties = new Properties();
+            //properties.load(new FileInputStream("C:\\Users\\User\\IdeaProjects\\Lab5_prog\\src\\main\\java\\server\\bd.properties"));
+            properties.load(new FileInputStream("bd.properties"));
             Class.forName(DRIVER);
-            Connection connection = DriverManager.getConnection(URL,USER,PASSWORD);
+            Connection connection = DriverManager.getConnection(URL, properties);
             ServerOutput.info("Connection with database set");
             return connection;
         } catch (SQLException throwables) {
@@ -29,12 +30,12 @@ public class DatabaseConnection {
         } catch (ClassNotFoundException e){
             ServerOutput.warning("Connection with data base error");
             return null;
-        } /*catch (FileNotFoundException e){
+        } catch (FileNotFoundException e){
             ServerOutput.warning("File bd.properties not found");
             return null;
         } catch (IOException e){
             ServerOutput.warning("IOE");
             return null;
-        }*/
+        }
     }
 }

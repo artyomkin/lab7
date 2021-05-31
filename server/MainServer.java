@@ -9,6 +9,7 @@ import server.connectionReciever.DatabaseConnection;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -17,6 +18,7 @@ import java.util.concurrent.ForkJoinPool;
 public class MainServer {
     public static void main(String[] args){
         Connection dataBaseConnection = DatabaseConnection.getConnection();
+
         if (dataBaseConnection==null) return;
         ForkJoinPool forkJoinPool = ForkJoinPool.commonPool();
         ExecutorService fixedThreadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -28,24 +30,8 @@ public class MainServer {
             ServerOutput.warning("Failed to load collection");
             return;
         }
-        CommandManager commandManager = new CommandManager(
-                new ShowCommand(collectionManager),
-                new ReplaceIfLowerCommand(collectionManager),
-                new ClearCommand(collectionManager),
-                new ExecuteScriptCommand(),
-                new ExitCommand(),
-                new FilterByTransportCommand(collectionManager),
-                new InfoCommand(collectionManager),
-                new InsertCommand(collectionManager),
-                new MinByAreaCommand(collectionManager),
-                new RemoveAllByHouseCommand(collectionManager),
-                new RemoveGreaterCommand(collectionManager),
-                new RemoveKeyCommand(collectionManager),
-                new UpdateCommand(collectionManager)
-        );
-        commandManager.addCommand(new HelpCommand(commandManager));
-        commandManager.addCommand(new HistoryCommand(commandManager));
-        new Server(commandManager).run(forkJoinPool,fixedThreadPool, dataBaseConnection, dataBaseManager);
+
+        new Server(collectionManager).run(forkJoinPool,fixedThreadPool, dataBaseConnection, dataBaseManager);
 
     }
     

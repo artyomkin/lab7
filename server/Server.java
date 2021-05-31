@@ -1,5 +1,6 @@
 package server;
 
+import server.commandHandler.utility.CollectionManager;
 import server.commandHandler.utility.CommandManager;
 import server.commandHandler.utility.DataBaseManager;
 import server.connectionReciever.ClientConnection;
@@ -14,10 +15,11 @@ import java.util.concurrent.ForkJoinPool;
 public class Server {
 
     private ClientConnection clientConnection;
-    private CommandManager commandManager;
-    public Server(CommandManager commandManager) {
+    private CollectionManager collectionManager;
+
+    public Server(CollectionManager collectionManager) {
         this.clientConnection = new ClientConnection(2232);
-        this.commandManager = commandManager;
+        this.collectionManager = collectionManager;
     }
 
     public void run(ForkJoinPool forkJoinPool,
@@ -27,7 +29,7 @@ public class Server {
          while(true){
             SocketChannel socketChannel = clientConnection.getConnection();
 
-            new Thread(new QueryHandler(commandManager, fixedThreadPool, forkJoinPool, socketChannel, dataBaseConnection, dataBaseManager)).start();
+            new Thread(new QueryHandler(collectionManager, fixedThreadPool, forkJoinPool, socketChannel, dataBaseConnection, dataBaseManager)).start();
         }
     }
 }
