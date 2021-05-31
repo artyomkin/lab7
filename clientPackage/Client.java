@@ -79,8 +79,8 @@ public class Client implements Runnable{
         socketChannel = connectionPair.second;
         try {
             Query query = null;
-            int cnt = 0;
-            while (cnt<10) {
+            //int cnt = 0;
+            while (isRunning) {
 
                     selector.select();
                     Set keySet = selector.selectedKeys();
@@ -91,12 +91,12 @@ public class Client implements Runnable{
                         if (key.isWritable()) {
                             if (query == null){
 
-                                int argInt = 100 + new Random().nextInt()%100;
+                               /* int argInt = 100 + new Random().nextInt()%100;
                                 String arg = ""+argInt;
                                 String command = "insert";
                                 if (argInt<50){
                                     command = "clear";
-                                }
+                                }*/
                                 query = new Query()
                                         .setStage(Stage.BEGINNING)
                                         .setDTOCommand(asker.askValidatedCommand())
@@ -125,7 +125,7 @@ public class Client implements Runnable{
 
                         }
                     }
-                    cnt++;
+                    //cnt++;
             }
             } catch(IOException e){
                 UserOutput.println("Selector exception");
