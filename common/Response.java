@@ -5,6 +5,7 @@ import common.dataTransferObjects.CommandTransferObject;
 import java.io.Serializable;
 
 public class Response implements Serializable {
+    private static final long serialVersionUID = 2L;
     private String content;
     private boolean executionFailed;
     private Instruction instruction;

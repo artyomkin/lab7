@@ -1,6 +1,8 @@
 package common;
 
-public enum Stage {
+import java.io.Serializable;
+
+public enum Stage implements Serializable {
     BEGINNING,
     ENDING;
 }
