@@ -6,6 +6,7 @@ import clientPackage.exceptions.ConnectionException;
 import clientPackage.exceptions.EndOfFileException;
 import clientPackage.inputHandler.Asker;
 import clientPackage.inputHandler.Validator;
+import clientPackage.utility.Authorizer;
 import clientPackage.utility.ConnectionReciever;
 import clientPackage.utility.QuerySender;
 import clientPackage.utility.ResponseReader;
@@ -29,9 +30,9 @@ public class Client implements Runnable{
     private Stack<String> callStack;
     private QuerySender querySender;
     private ResponseReader responseReader;
+    private Authorizer authorizer;
     private String login;
     private String password;
-
     public Client(String host, int port){
         this.connectionReciever = new ConnectionReciever(host, port);
         this.validator = new Validator();
@@ -46,9 +47,8 @@ public class Client implements Runnable{
     }
     public boolean run(String filepath) {
         UserInput userInput;
-        SocketChannel socketChannel = null;
-        Pair<Selector,SocketChannel> connection = null;
-        Selector selector = null;
+        SocketChannel socketChannel;
+        Selector selector;
         if (filepath == "") {
             userInput = new UserInput(new Scanner(System.in));
             this.asker = new Asker(userInput, validator);
@@ -61,20 +61,26 @@ public class Client implements Runnable{
                 return true;
             }
         }
-        Pair<Selector, SocketChannel> p = null;
-        if(!filepath.isEmpty()) p = logIn();
-        else {
-            try {
-                p = connectionReciever.connectToServer();
-            } catch (ConnectionException e) {
-                e.printStackTrace();
-            }
+
+        Pair<Selector, SocketChannel> connectionPair = null;
+        try {
+            connectionPair = connectionReciever.connectToServer();
+        } catch (ConnectionException e) {
+            UserOutput.println("Connecting with server failed");
         }
-        selector = p.first;
-        socketChannel = p.second;
+        authorizer = new Authorizer(connectionReciever,asker,querySender,responseReader);
+        if(filepath.isEmpty()){
+            authorizer.logIn(connectionPair);
+            this.login = authorizer.getLogin();
+            this.password = authorizer.getPassword();
+        }
+
+        selector = connectionPair.first;
+        socketChannel = connectionPair.second;
         try {
             Query query = null;
-            while (isRunning) {
+            int cnt = 0;
+            while (cnt<10) {
 
                     selector.select();
                     Set keySet = selector.selectedKeys();
@@ -84,29 +90,42 @@ public class Client implements Runnable{
                         it.remove();
                         if (key.isWritable()) {
                             if (query == null){
+
+                                int argInt = 100 + new Random().nextInt()%100;
+                                String arg = ""+argInt;
+                                String command = "insert";
+                                if (argInt<50){
+                                    command = "clear";
+                                }
                                 query = new Query()
                                         .setStage(Stage.BEGINNING)
                                         .setDTOCommand(asker.askValidatedCommand())
+                                        //.setDTOCommand(new CommandTransferObject().setCommand("execute_script").setArgument("C:\\Users\\User\\IdeaProjects\\Client\\src\\clientPackage\\inputScript2.txt"))
                                         .setLogin(login)
                                         .setPassword(password);
 
                             }
                             querySender.sendQuery(query, socketChannel);
-                            System.out.println("Отправил запрос");
                             socketChannel.register(selector, SelectionKey.OP_READ);
                         }
                         if (key.isReadable()) {
                             Response response = responseReader.getResponse(socketChannel);
-                            System.out.println("Получил ответ");
                             if (response.getInstruction() != Instruction.SCRIPT && !response.getContent().isEmpty()) {
                                 UserOutput.println(response.getContent());
                             }
-                            query = handleResponse(response, socketChannel, selector).setLogin(login).setPassword(password);
+                            query = handleResponse(response, socketChannel, selector);
+                            if(query!=null){
+                                query.setLogin(login).setPassword(password);
+                            } else {
+                                socketChannel.close();
+                                return false;
+                            }
 
                             socketChannel.register(selector, SelectionKey.OP_WRITE);
 
                         }
                     }
+                    cnt++;
             }
             } catch(IOException e){
                 UserOutput.println("Selector exception");
@@ -133,6 +152,28 @@ public class Client implements Runnable{
             }
             case ASK_FLAT: {
                 FlatTransferObject flat = asker.askValidatedFlat();
+               /* UserOutput.println("ASKING FLAT");
+                FlatTransferObject flat = new FlatTransferObject()
+                        .setArea(12)
+                        .setCoordinates(
+                                new CoordinatesTransferObject()
+                                .setX(1D)
+                                .setY(2L)
+                        )
+                        .setHouse(
+                                new HouseTransferObject()
+                                .setName("123")
+                                .setNumberOfFlatsOnFloor(12)
+                                .setYear(12)
+                                .setNumberOfFloors(12)
+                                .setNumberOfLifts(1)
+                        )
+                        .setName("123")
+                        .setLivingSpace(12)
+                        .setCreator("123")
+                        .setNumberOfRooms(1)
+                        .setPrice(12)
+                        .setTransport(TransportTransferObject.NONE);*/
                 if(flat!=null) return query.setDTOFlat(flat);
                 else return null;
             }
@@ -178,7 +219,7 @@ public class Client implements Runnable{
             }
             case SIGN_IN:{
                 try {
-                     while(!signIn(selector,socketChannel));
+                     while(!authorizer.signIn(selector,socketChannel));
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (ConnectionException e) {
@@ -187,7 +228,7 @@ public class Client implements Runnable{
             }
             case SIGN_UP:{
                 try{
-                   while(!signUp(selector,socketChannel));
+                   while(!authorizer.signUp(selector,socketChannel));
                 } catch (IOException e){
                     e.printStackTrace();
                 } catch (ConnectionException e){
@@ -198,95 +239,6 @@ public class Client implements Runnable{
         }
 
     }
-    public Pair<Selector,SocketChannel> logIn(){
-        SocketChannel socketChannel = null;
-        Pair<Selector,SocketChannel> connection;
-        Selector selector;
-        try{
-            UserOutput.println("Connecting to server...");
-            connection = connectionReciever.connectToServer();
-            selector = connection.first;
-            socketChannel = connection.second;
-            boolean isSignUp = asker.isSignUp();
-            if(isSignUp){
-               while(!signUp(selector,socketChannel));
-            }
-            while(!signIn(selector,socketChannel));
-            return connection;
-        } catch (IOException | EndOfFileException | ConnectionException e){
-            UserOutput.println("Connection error");
-            return null;
-        }
-    }
-    public boolean signUp(Selector selector,SocketChannel socketChannel) throws IOException, EndOfFileException, ConnectionException {
 
-        selector.select();
-        Set keySet = selector.selectedKeys();
-        Iterator it = keySet.iterator();
-        while(it.hasNext()){
-            SelectionKey key = (SelectionKey) it.next();
-            it.remove();
-            if(key.isWritable()){
-                String authPair[];
-                UserOutput.println("Signing up...");
-                authPair = asker.signUp();
-                String preLogin = authPair[0];
-                String prePassword = authPair[1];
-                Query authQuery = new Query()
-                        .setLogin(preLogin)
-                        .setPassword(prePassword)
-                        .setSignIn(false)
-                        .setSignUp(true);
-                querySender.sendQuery(authQuery,socketChannel);
-                socketChannel.register(selector,SelectionKey.OP_READ);
-            }
-            if(key.isReadable()){
-                Response response = responseReader.getResponse(socketChannel);
-                UserOutput.println(response.getContent());
-                if (response.getInstruction().equals(Instruction.SIGN_IN)){
-                    UserOutput.println("You are signed up!");
-                    socketChannel.register(selector,SelectionKey.OP_WRITE);
-                    return true;
-                }
-                socketChannel.register(selector,SelectionKey.OP_WRITE);
-            }
-        }
-        return false;
-    }
-
-    public boolean signIn(Selector selector, SocketChannel socketChannel) throws IOException, EndOfFileException, ConnectionException {
-        while(selector.select(500)==0);
-        Set keySet = selector.selectedKeys();
-        Iterator it = keySet.iterator();
-        Query authQuery = null;
-        while(it.hasNext()){
-            SelectionKey key = (SelectionKey) it.next();
-            it.remove();
-            if(key.isWritable()){
-                String[] authPair;
-                UserOutput.println("Signing in...");
-                authPair = asker.signIn();
-                login = authPair[0];
-                password = authPair[1];
-                authQuery = new Query()
-                        .setLogin(login)
-                        .setPassword(password)
-                        .setSignUp(false);
-
-                querySender.sendQuery(authQuery,socketChannel);
-                socketChannel.register(selector,SelectionKey.OP_READ);
-            }
-            if(key.isReadable()){
-                Response response = responseReader.getResponse(socketChannel);
-                UserOutput.println(response.getContent());
-                if(response.getInstruction().equals(Instruction.ASK_COMMAND)) {
-                    socketChannel.register(selector,SelectionKey.OP_WRITE);
-                    return true;
-                }
-                socketChannel.register(selector,SelectionKey.OP_WRITE);
-            }
-        }
-        return false;
-    }
 }
 
