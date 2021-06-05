@@ -26,11 +26,11 @@ public class ReplaceIfLowerCommand extends AbstractCommand{
             } catch(NumberFormatException e){
                 return new Response("Specify a key",true,Instruction.ASK_COMMAND);
             }
-            if (!collectionManager.getElementByKey(key).getCreator().equals(query.getLogin()))
-                return new Response("You have no permission to replace it",true,Instruction.ASK_COMMAND);
             if (!collectionManager.contains(Integer.parseInt(query.getDTOCommand().getArgument()))){
                 return new Response("No flat with specified key found", true, Instruction.ASK_COMMAND);
             }
+            if (!collectionManager.getElementByKey(key).getCreator().equals(query.getLogin()))
+                return new Response("You have no permission to replace it",true,Instruction.ASK_COMMAND);
             return new Response("",false, Instruction.ASK_FLAT,Stage.ENDING,query);
         } else {
             Integer key = Integer.parseInt(query.getDTOCommand().getArgument());

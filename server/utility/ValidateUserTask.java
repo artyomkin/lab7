@@ -14,6 +14,6 @@ public class ValidateUserTask implements Callable<Boolean> {
     }
 
     public Boolean call(){
-        return userAuthorizer.validate(login,password);
+        return userAuthorizer.validate(login,password).equals(UserCount.ONE);
     }
 }

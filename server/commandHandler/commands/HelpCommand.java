@@ -10,6 +10,7 @@ import common.Response;
 public class HelpCommand extends AbstractCommand{
 
     private CommandManager commandManager;
+    private String content;
 
     public HelpCommand(CommandManager commandManager){
         super("help","prints the information about available commands");
@@ -20,12 +21,10 @@ public class HelpCommand extends AbstractCommand{
      * @return exit status of command
      * **/
     public Response execute(Query query){
-        String res = "";
         commandManager.getStream()
-                .forEach(command->updateResult(res,command.getName() + " " + command.getDescription() + "\n"));
-        return new Response(res,false, Instruction.ASK_COMMAND);
-    }
-    private String updateResult(String res,String add){
-        return res+add;
+                .forEach(command->content+=command.getName()+' '+command.getDescription()+'\n');
+        Response result = new Response(content,false, Instruction.ASK_COMMAND);
+        content = "";
+        return result;
     }
 }

@@ -23,6 +23,9 @@ public class RemoveKeyCommand extends AbstractCommand{
         } catch(NumberFormatException e){
             return new Response("Specify a key",true,Instruction.ASK_COMMAND);
         }
+        if(!collectionManager.contains(key)){
+            return new Response("No such element found",true,Instruction.ASK_COMMAND);
+        }
         if(!collectionManager.getElementByKey(key).getCreator().equals(query.getLogin()))
             return new Response("You have no permission to remove this",true,Instruction.ASK_COMMAND);
         if(!collectionManager.remove(key)) return new Response("Failed to remove the flat", true,Instruction.ASK_COMMAND);

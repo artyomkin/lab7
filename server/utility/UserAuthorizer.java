@@ -3,10 +3,8 @@ package server.utility;
 import common.Instruction;
 import common.Query;
 import common.Response;
-import server.Server;
 import server.commandHandler.utility.DataBaseManager;
 import server.commandHandler.utility.ServerOutput;
-import server.connectionReciever.DatabaseConnection;
 import server.queryReader.QueryReader;
 import server.responseSender.SendingResponseTask;
 
@@ -31,7 +29,7 @@ public class UserAuthorizer {
         this.socketChannel = socketChannel;
     }
 
-    public boolean logIn(UserAuthorizer userAuthorizer, QueryReader queryReader, InputStream in) throws NullPointerException{
+    public boolean logIn(QueryReader queryReader, InputStream in) throws NullPointerException{
         boolean loggedIn = false;
         while(!loggedIn){
             Query auth = queryReader.getQuery(in);
@@ -40,8 +38,11 @@ public class UserAuthorizer {
             }
             if (auth.isSignUp()){
                 Response authResponse;
-                if(userAuthorizer.validate(auth.getLogin(),auth.getPassword())) {
+                UserCount validation = validate(auth.getLogin(),auth.getPassword());
+                if(!validation.equals(UserCount.ZERO) && !validation.equals(UserCount.ERROR)) {
                     authResponse = new Response("This login already exists",true, Instruction.SIGN_UP);
+                } else if (validation.equals(UserCount.ERROR)){
+                    authResponse = new Response("Connection error",true,Instruction.SIGN_UP);
                 } else {
                     try {
                         UserRegistrant userRegistrant = new UserRegistrant(connection,dataBaseManager,new Encryptor());
@@ -60,15 +61,23 @@ public class UserAuthorizer {
                 }
                 fixedThreadPool.execute(new SendingResponseTask(authResponse,socketChannel));
             } else {
-                loggedIn = userAuthorizer.validate(auth.getLogin(), auth.getPassword());
-                Response authResponse = new Response(
-                        loggedIn ?
-                                "You are logged in" :
-                                "Incorrect login or password",
-                        !loggedIn,
-                        loggedIn? Instruction.ASK_COMMAND :
-                                Instruction.SIGN_IN
-                );
+                UserCount validation = validate(auth.getLogin(), auth.getPassword());
+                Response authResponse;
+                if (validation.equals(UserCount.ERROR)){
+                    authResponse = new Response("Connection error",true,Instruction.SIGN_IN);
+                } else {
+                    loggedIn = validation.equals(UserCount.ONE);
+                    authResponse = new Response(
+                            loggedIn ?
+                                    "You are logged in" :
+                                    "Incorrect login or password",
+                            !loggedIn,
+                            loggedIn ?
+                                    Instruction.ASK_COMMAND :
+                                    Instruction.SIGN_IN
+                    );
+                }
+
                 fixedThreadPool.execute(new SendingResponseTask(authResponse,socketChannel));
 
             }
@@ -76,21 +85,32 @@ public class UserAuthorizer {
         return true;
     }
 
-    public boolean validate(String login, String password){
+    public UserCount validate(String loginParam, String password){
         try {
-            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM users WHERE(login = ?)");
-            preparedStatement.setString(1, login);
-            ResultSet resultSet = preparedStatement.executeQuery();
-
-            if(!resultSet.next()) return false;
-            String passwordHash = resultSet.getString("password");
-            String salt = resultSet.getString("salt");
-            return passwordHash.equals(encryptor.encrypt(password+salt));
+            PreparedStatement statement = connection.prepareStatement("SELECT * FROM users WHERE (login = ?)");
+            statement.setString(1,loginParam);
+            ResultSet resultSet = statement.executeQuery();
+            int cnt = 0;
+            String passwordHash = "";
+            String salt = "";
+            while(resultSet.next()){
+                cnt++;
+                passwordHash = resultSet.getString("password");
+                salt = resultSet.getString("salt");
+            }
+            if (cnt>1){
+                return UserCount.MANY;
+            } else if (cnt < 1){
+                return UserCount.ZERO;
+            } else if (!passwordHash.isEmpty() && !salt.isEmpty() && passwordHash.equals(encryptor.encrypt(password+salt))){
+                return UserCount.ONE;
+            } else {
+                return UserCount.INCORRECT;
+            }
         } catch (SQLException e){
             ServerOutput.warning("Failed to validate user");
-            return false;
+            return UserCount.ERROR;
         }
-
     }
 
 

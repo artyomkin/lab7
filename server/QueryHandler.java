@@ -77,7 +77,7 @@ public class QueryHandler implements Runnable{
     public void run(){
         boolean loggedIn;
         try{
-            loggedIn = userAuthorizer.logIn(userAuthorizer,queryReader,in);
+            loggedIn = userAuthorizer.logIn(queryReader,in);
         } catch (NullPointerException e){
             return;
         }

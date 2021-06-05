@@ -18,7 +18,6 @@ public class DatabaseConnection {
     public static Connection getConnection(){
         try {
             Properties properties = new Properties();
-            //properties.load(new FileInputStream("C:\\Users\\User\\IdeaProjects\\Lab5_prog\\src\\main\\java\\server\\bd.properties"));
             properties.load(new FileInputStream("bd.properties"));
             Class.forName(DRIVER);
             Connection connection = DriverManager.getConnection(URL, properties);

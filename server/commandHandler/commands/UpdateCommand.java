@@ -26,10 +26,11 @@ public class UpdateCommand extends AbstractCommand{
             } catch (NumberFormatException e){
                 return new Response("Incorrect key",true,Instruction.ASK_COMMAND);
             }
-            if(!collectionManager.getElementByKey(key).getCreator().equals(query.getLogin()))
-                return new Response("You have no permission to update it",true,Instruction.ASK_COMMAND);
             if (!collectionManager.contains(key))
                 return new Response("No flat with specified key found",true,Instruction.ASK_COMMAND);
+            if(!collectionManager.getElementByKey(key).getCreator().equals(query.getLogin()))
+                return new Response("You have no permission to update it",true,Instruction.ASK_COMMAND);
+
             return new Response("",false,Instruction.ASK_FLAT,Stage.ENDING,query);
         } else {
             Integer key = Integer.parseInt(query.getDTOCommand().getArgument());
