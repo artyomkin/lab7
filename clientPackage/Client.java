@@ -21,7 +21,7 @@ import java.nio.channels.SocketChannel;
 import java.util.*;
 
 
-public class Client implements Runnable{
+public class Client /*implements Runnable*/{
 
     private Validator validator;
     private ConnectionReciever connectionReciever;
